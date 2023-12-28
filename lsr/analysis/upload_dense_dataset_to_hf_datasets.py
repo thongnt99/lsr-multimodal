@@ -13,6 +13,6 @@ api = HfApi()
 api.upload_file(
     path_or_fileobj="/projects/0/guse0488/dataset/mscoco/blip_img_embs.parquet",
     path_in_repo="img_embs.parquet",
-    repo_id="https://huggingface.co/datasets/lsr42/mscoco-blip-dense",
+    repo_id="lsr42/mscoco-blip-dense",
     repo_type="dataset",
 )
