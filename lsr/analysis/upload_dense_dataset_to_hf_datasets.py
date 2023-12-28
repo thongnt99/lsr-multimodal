@@ -2,7 +2,8 @@ from huggingface_hub import HfApi
 import pandas as pd
 import json
 import torch
-mscoco_img_embs = torch.load("/projects/0/guse0488/dataset/mscoco/img_embs.pt")
+mscoco_img_embs = torch.load(
+    "/projects/0/guse0488/dataset/mscoco/img_embs.pt").tolist()
 mscoco_img_ids = json.load(
     open("/projects/0/guse0488/dataset/mscoco/img_ids.json"))
 mscoco_img_df = pd.DataFrame({"id": mscoco_img_ids, "emb": mscoco_img_embs})
