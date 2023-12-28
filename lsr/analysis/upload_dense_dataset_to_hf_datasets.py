@@ -35,7 +35,7 @@ import torch
 mscoco_img_embs = torch.load(
     "/projects/0/guse0488/dataset/mscoco/albef_img_embs.pt").tolist()
 mscoco_img_ids = json.load(
-    open("/projects/0/guse0488/dataset/mscoco/albef_img_ids.json"))
+    open("/projects/0/guse0488/dataset/mscoco/img_ids.json"))
 mscoco_img_df = pd.DataFrame({"id": mscoco_img_ids, "emb": mscoco_img_embs})
 mscoco_img_df.to_parquet(
     "/projects/0/guse0488/dataset/mscoco/albef_img_embs.parquet")
@@ -50,7 +50,7 @@ api.upload_file(
 mscoco_text_embs = torch.load(
     "/projects/0/guse0488/dataset/mscoco/albef_txt_embs.pt").tolist()
 mscoco_text_ids = json.load(
-    open("/projects/0/guse0488/dataset/mscoco/albef_txt_ids.json"))
+    open("/projects/0/guse0488/dataset/mscoco/txt_ids.json"))
 mscoco_text_df = pd.DataFrame({"id": mscoco_text_ids, "emb": mscoco_text_embs})
 mscoco_text_df.to_parquet(
     "/projects/0/guse0488/dataset/mscoco/albef_text_embs.parquet")
