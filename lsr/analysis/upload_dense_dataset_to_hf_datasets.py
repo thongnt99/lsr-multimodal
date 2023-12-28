@@ -43,7 +43,7 @@ api = HfApi()
 api.upload_file(
     path_or_fileobj="/projects/0/guse0488/dataset/mscoco/albef_img_embs.parquet",
     path_in_repo="img_embs.parquet",
-    repo_id="lsr42/albef-blip-dense",
+    repo_id="lsr42/mscoco-albef-dense",
     repo_type="dataset",
 )
 
@@ -58,6 +58,6 @@ api = HfApi()
 api.upload_file(
     path_or_fileobj="/projects/0/guse0488/dataset/mscoco/albef_text_embs.parquet",
     path_in_repo="text_embs.parquet",
-    repo_id="lsr42/albef-blip-dense",
+    repo_id="lsr42/mscoco-albef-dense",
     repo_type="dataset",
 )
