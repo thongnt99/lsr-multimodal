@@ -11,12 +11,12 @@ import ir_measures
 from ir_measures import *
 from collections import OrderedDict
 import torch.nn.functional as F
-from .regularizer import *
-from .dataset import *
-from .model import MLM
+from regularizer import *
+from dataset import *
+from model import MLM
 from pathlib import Path
-from .utils import write_trec_file
-from .utils import cal_correaltion
+from utils import write_trec_file
+from utils import cal_correaltion
 from torch.utils.data import DataLoader
 
 parser = argparse.ArgumentParser(description="Training Text-Image LSR models")
