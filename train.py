@@ -199,7 +199,7 @@ if __name__ == "__main__":
     losses = []
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     model_dir = Path(
-        "output/{args.data}_qreg_{args.q_reg}_dreg_{args.d_reg}_tmp.tuned_{args.temp}")
+        f"output/{args.data}_qreg_{args.q_reg}_dreg_{args.d_reg}_tmp.tuned_{args.temp}")
     model_dir.mkdir(exist_ok=True, parents=True)
     model_path = model_dir/"model.pt"
 
