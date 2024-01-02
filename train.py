@@ -198,12 +198,8 @@ if __name__ == "__main__":
     eval_metrics = [[], [], []]
     losses = []
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
-    if args.mask_ratio < 0:
-        model_dir = Path(
-            f"outputs/{args.model}_dense2sparse_shared_mlm_dense_scores_{args.dataset}_qreg_{args.q_reg}_d_reg_{args.d_reg}_temp.tuned_{args.temp}")
-    else:
-        model_dir = Path(
-            f"outputs/{args.model}_dense2sparse_shared_mlm_dense_scores_{args.dataset}_qreg_{args.q_reg}_d_reg_{args.d_reg}_temp.tuned_{args.temp}_mask_ratio_{args.mask_ratio}")
+    model_dir = Path(
+        "output/{args.data}_qreg_{args.q_reg}_dreg_{args.d_reg}_tmp.tuned_{args.temp}")
     model_dir.mkdir(exist_ok=True)
     model_path = model_dir/"model.pt"
 
