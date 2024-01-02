@@ -108,12 +108,11 @@ def evaluate(model, text_collection, image_collection, qrels, shared_collator, m
 
 if __name__ == "__main__":
     dense_embs = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
-                                                     "text_emb": "text_embs.parquet"})
+                                                     "text_emb": "text_embs.parquet"}, keep_in_memory=True)
     meta_data = json.load(open(hf_hub_download(
         repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
     text_ids = dense_embs['text_emb']["id"]
     text_embs = dense_embs['text_emb']['emb']
-
     img_ids = dense_embs['img_emb']['id']
     img_embs = dense_embs['img_emb']['emb']
     txtid2row = dict(zip(text_ids, range(len(text_ids))))
