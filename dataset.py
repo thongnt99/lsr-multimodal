@@ -20,7 +20,7 @@ class TrainDataset(Dataset):
         text = self.texts_dict[text_id]
         text_emb = self.text_embs[self.txtid2row[text_id]]
         img_emb = self.img_embs[self.imgid2row[image_id]]
-        return {"type": "train", "text": text, "text_emb": text_emb, "img_emb": img_emb}
+        return {"type": "train", "text": text, "text_emb": torch.tensor(text_emb), "img_emb": torch.tensor(img_emb)}
 
 
 class VectorCollator:
@@ -78,7 +78,7 @@ class TextCollection(Dataset):
         item_id = self.ids[index]
         item_text = self.texts[index]
         item_emb = self.txt_embs[self.txtid2row[item_id]]
-        return {"type": "text", "text_id": item_id, "text": item_text, "text_emb": item_emb}
+        return {"type": "text", "text_id": item_id, "text": item_text, "text_emb": torch.tensor(item_emb)}
 
 
 class ImageCollection(Dataset):
@@ -94,4 +94,4 @@ class ImageCollection(Dataset):
     def __getitem__(self, index):
         item_id = self.ids[index]
         item_emb = self.img_embs[self.imgid2row[item_id]]
-        return {"type": "image", "img_id": item_id, "img_emb": item_emb}
+        return {"type": "image", "img_id": item_id, "img_emb": torch.tensor(item_emb)}
