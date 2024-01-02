@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
     files = []
     test_files = []
-    for image in meta_data['images']:
+    for image in tqdm(meta_data['images'], desc="Processing meta data."):
         image_id = str(image["imgid"])
         caption_texts = [sent["raw"] for sent in image["sentences"]]
         caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
