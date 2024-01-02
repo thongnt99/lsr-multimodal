@@ -1,4 +1,5 @@
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 from collections import defaultdict
 import torch
 from torch import nn
@@ -108,8 +109,8 @@ def evaluate(model, text_collection, image_collection, qrels, shared_collator, m
 if __name__ == "__main__":
     dense_embs = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
                                                      "text_emb": "text_embs.parquet"})
-    meta_data = load_dataset(args.data, data_files={
-                             "meta": "dataset_meta.json"})
+    meta_data = json.load(open(hf_hub_download(
+        repo_id=args.data, filename="dataset_meta.json")))
     text_ids = dense_embs['text_emb']["id"]
     text_embs = dense_embs['text_emb']['emb']
 
