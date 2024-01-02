@@ -110,7 +110,7 @@ if __name__ == "__main__":
     dense_embs = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
                                                      "text_emb": "text_embs.parquet"})
     meta_data = json.load(open(hf_hub_download(
-        repo_id=args.data, filename="dataset_meta.json")))
+        repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
     text_ids = dense_embs['text_emb']["id"]
     text_embs = dense_embs['text_emb']['emb']
 
@@ -138,7 +138,7 @@ if __name__ == "__main__":
 
     files = []
     test_files = []
-    for image in meta_data['meta']['images']:
+    for image in meta_data['images']:
         image_id = str(image["imgid"])
         caption_texts = [sent["raw"] for sent in image["sentences"]]
         caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
