@@ -24,4 +24,6 @@ class BICELoss(nn.Module):
                 self.ce(sparse_t2i_scores, prob_dense_t2i))/2
         reg = (self.q_regularizer(sparse_texts) +
                self.d_regularizer(sparse_imgs))/2
+        self.q_regularizer.step()
+        self.d_regularizer.step()
         return loss, reg

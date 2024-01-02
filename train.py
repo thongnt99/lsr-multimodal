@@ -1,3 +1,4 @@
+from loss import BICELoss
 from datasets import load_dataset
 from huggingface_hub import hf_hub_download
 from collections import defaultdict
@@ -6,7 +7,7 @@ from torch import nn
 import json
 from tqdm import tqdm
 import argparse
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+from transformers import AutoTokenizer
 from transformers.optimization import get_linear_schedule_with_warmup
 import ir_measures
 from ir_measures import *
@@ -37,16 +38,71 @@ parser.add_argument("--q_reg", type=float, default=2e-2,
                     help="Learning rate for sparse projectors")
 parser.add_argument("--d_reg", type=float, default=2e-2,
                     help="Learning rate for sparse projectors")
-parser.add_argument("--mask_ratio", type=float, default=-1, help="mask ratio")
 args = parser.parse_args()
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
-def evaluate(model, text_collection, image_collection, qrels, shared_collator, mask_ratio=torch.tensor(0.0), return_run_file=False, dense=False):
+def train(model, train_dataloader, val_dataset, num_epochs, loss: BICELoss,  optimizer, scheduler, grad_scaler, highest_recall_1):
+    if args.mask_ratio >= 0:
+        mask_ratio = torch.tensor(args.mask_ratio)
+    else:
+        mask_ratio = torch.tensor(1.0)
+        step = mask_ratio/(num_epochs*0.95)
+    for epoch_idx, epoch in enumerate(range(0, num_epochs)):
+        i = 0
+        batch_loss = 0
+        batch_rel_loss = 0
+        batch_reg = 0
+        q_len = []
+        d_len = []
+        for idx, batch in enumerate(tqdm(train_dataloader, desc="Training batch")):
+            optimizer.zero_grad()
+            batch_tokenized_texts, dense_texts, dense_imgs = batch
+            batch_tokenized_texts = batch_tokenized_texts.to("cuda")
+            dense_texts = dense_texts.to("cuda")
+            dense_imgs = dense_imgs.to("cuda")
+            with torch.cuda.amp.autocast(enabled=args.use_amp):
+                if torch.bernoulli(mask_ratio) == 1:
+                    sparse_texts = model(
+                        dense_texts, batch_tokenized_texts["input_ids"], batch_tokenized_texts["attention_mask"])
+                else:
+                    sparse_texts = model(dense_imgs)
+                sparse_imgs = model(dense_imgs)
+                rel_loss, reg = loss.forward(
+                    sparse_texts, sparse_imgs, dense_texts, dense_imgs)
+                batch_rel_loss += rel_loss.item()
+                batch_reg += reg
+                loss = rel_loss + reg
+                batch_loss += loss.item()
+                q_len.append((sparse_texts > 0).float().sum(dim=-1).mean())
+                d_len.append((sparse_imgs > 0).float().sum(dim=-1).mean())
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler.step()
+            i += 1
+        batch_loss = batch_loss / len(train_dataloader)
+        batch_rel_loss = batch_rel_loss/len(train_dataloader)
+        batch_reg = batch_reg / len(train_dataloader)
+        recall1, recall5, recall10, mrr10, avg_flops = evaluate(
+            model, val_dataset, vector_collator, mask_ratio=mask_ratio)
+        if recall1 > highest_recall_1:
+            highest_recall_1 = recall1
+            print(f"Obtained higher recall@1: {highest_recall_1}")
+            print(f"Saving checkpoint to {model_path}")
+            torch.save(model.state_dict(), model_path)
+
+        print(
+            f"Epoch {epoch_idx+1} R@1 {recall1} R@5 {recall5} R@10 {recall10} loss {batch_loss} rel_loss {batch_rel_loss} reg {batch_reg} q_len {sum(q_len)/len(q_len)} d_len {sum(d_len)/len(d_len)} avg_flops {avg_flops}")
+        mask_ratio = torch.relu(mask_ratio-step)
+    return highest_recall_1
+
+
+def evaluate(model, dataset, shared_collator, mask_ratio=torch.tensor(0.0), return_run_file=False, dense=False):
+    text_collection, image_collection, qrels = dataset
     model.eval()
     img_dataloader = DataLoader(
         image_collection, batch_size=args.eval_batch_size, shuffle=False, num_workers=18, collate_fn=shared_collator)
-
     text_dataloader = DataLoader(
         text_collection, batch_size=args.eval_batch_size, shuffle=False, num_workers=18, collate_fn=shared_collator)
     all_text_embs = []
@@ -106,9 +162,9 @@ def evaluate(model, text_collection, image_collection, qrels, shared_collator, m
         return metrics[R@1], metrics[R@5], metrics[R@10], metrics[MRR@10], avg_flops
 
 
-if __name__ == "__main__":
-    dense_embs = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
-                                                     "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("numpy")
+def prepare_data(dataset_repo):
+    dense_embs = load_dataset(dataset_repo, data_files={"img_emb": "img_embs.parquet",
+                                                        "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("numpy")
     meta_data = json.load(open(hf_hub_download(
         repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
     text_ids = dense_embs['text_emb']["id"]
@@ -117,8 +173,6 @@ if __name__ == "__main__":
     img_embs = dense_embs['img_emb']['emb']
     txtid2row = dict(zip(text_ids, range(len(text_ids))))
     imgid2row = dict(zip(img_ids, range(len(img_ids))))
-    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-    vector_collator = VectorCollator(tokenizer)
 
     train_image_ids = []
     train_captions = []
@@ -135,8 +189,6 @@ if __name__ == "__main__":
     test_caption_ids = []
     test_qrels = defaultdict(dict)
 
-    files = []
-    test_files = []
     for image in tqdm(meta_data['images'], desc="Processing meta data."):
         image_id = str(image["imgid"])
         caption_texts = [sent["raw"] for sent in image["sentences"]]
@@ -161,8 +213,6 @@ if __name__ == "__main__":
                 test_qrels[sent_id][image_id] = 1
     train_dataset = TrainDataset(
         dict(zip(train_caption_ids, train_captions)), txtid2row, imgid2row, text_embs, img_embs, train_pairs)
-    train_dataloader = DataLoader(
-        train_dataset, shuffle=True, batch_size=args.train_batch_size, num_workers=18, collate_fn=vector_collator)
     val_text_collection = TextCollection(
         val_caption_ids, val_captions, txtid2row, text_embs)
     val_image_collection = ImageCollection(val_image_ids, imgid2row, img_embs)
@@ -170,140 +220,62 @@ if __name__ == "__main__":
         test_caption_ids, test_captions, txtid2row, text_embs)
     test_image_collection = ImageCollection(
         test_image_ids, imgid2row, img_embs)
+    return train_dataset, (val_text_collection, val_image_collection, val_qrels), (test_text_collection, test_image_collection, test_qrels)
+
+
+if __name__ == "__main__":
     model = MLM(256)
     model.to("cuda")
-    pretrained_layers = list(model.vocab_layer_norm.parameters()) + \
-        list(model.vocab_projector.parameters())
-    optimizer1 = torch.optim.AdamW(
-        pretrained_layers, lr=5e-5, betas=(0.9, 0.999), eps=1e-8, weight_decay=0.0)
+    train_dataset, val_dataset, test_dataset = prepare_data(
+        args.data)
+    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+    vector_collator = VectorCollator(tokenizer)
+    train_dataloader = DataLoader(
+        train_dataset, shuffle=True, batch_size=args.train_batch_size, num_workers=18, collate_fn=vector_collator)
     temp = nn.Parameter(torch.tensor(
         args.temp, requires_grad=True, device="cuda"))
-    new_layers = list(model.proj.parameters()) + [temp]
-    optimizer2 = torch.optim.AdamW(
-        new_layers, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0.0)
+    optimizer = torch.optim.AdamW(
+        [
+            {"params": list(model.vocab_layer_norm.parameters()) +
+             list(model.vocab_projector.parameters()), "lr": 5e-5, "betas": (0.9, 0.999), "weight_decay": 0.0},
+            {"params": list(model.proj.prameters()) + [temp], "lr": 1e-3}
+        ],
+        eps=1e-8,
+        betas=(0.9, 0.999),
+        weight_decay=0.0
+    )
     num_training_steps = len(train_dataloader) * args.epochs
     num_warm_up = int(num_training_steps * 0.2)
-    scheduler1 = get_linear_schedule_with_warmup(
-        optimizer1, num_warmup_steps=num_warm_up, num_training_steps=num_training_steps)
-    scheduler2 = get_linear_schedule_with_warmup(
-        optimizer2, num_warmup_steps=num_warm_up, num_training_steps=num_training_steps)
-    loss_img = torch.nn.CrossEntropyLoss()
-    loss_txt = torch.nn.CrossEntropyLoss()
-    q_regularizer = L1(weight=args.q_reg, T=num_warm_up)
-    d_regularizer = L1(weight=args.d_reg, T=num_warm_up)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=num_warm_up, num_training_steps=num_training_steps)
+    loss = BICELoss(temp=temp, q_reg=args.q_reg,
+                    d_reg=args.d_reg, T=num_warm_up)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     test_dense_run, recall1, recall5, recall10, mrr10, dense_flops = evaluate(
-        model, test_text_collection, test_image_collection, test_qrels, vector_collator, dense=True, return_run_file=True)
+        model, test_dataset, vector_collator, dense=True, return_run_file=True)
     print(
         f"dense performance: r@1: {recall1} r@5: {recall5} r@10: {recall10} mrr@10: {mrr10} dense_flops: {dense_flops}")
-    eval_metrics = [[], [], []]
-    losses = []
-    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     model_dir = Path(
         f"output/{args.data}_qreg_{args.q_reg}_dreg_{args.d_reg}_tmp.tuned_{args.temp}")
     model_dir.mkdir(exist_ok=True, parents=True)
     model_path = model_dir/"model.pt"
-
-    def train(num_epochs, highest_recall_1, masking=True):
-        if args.mask_ratio >= 0:
-            mask_ratio = torch.tensor(args.mask_ratio)
-        else:
-            mask_ratio = torch.tensor(1.0)
-            step = mask_ratio/(num_epochs*0.95)
-        for epoch_idx, epoch in enumerate(range(0, num_epochs)):
-            i = 0
-            batch_loss = 0
-            batch_rel_loss = 0
-            batch_reg = 0
-            q_len = []
-            d_len = []
-            for idx, batch in enumerate(tqdm(train_dataloader, desc="Training batch")):
-                optimizer1.zero_grad()
-                optimizer2.zero_grad()
-                batch_tokenized_texts, batch_txt_embs, batch_img_embs = batch
-                batch_tokenized_texts = batch_tokenized_texts.to("cuda")
-                batch_txt_embs = batch_txt_embs.to("cuda")
-                batch_img_embs = batch_img_embs.to("cuda")
-                with torch.cuda.amp.autocast(enabled=args.use_amp):
-                    if torch.bernoulli(mask_ratio) == 1:
-                        sparse_texts = model(
-                            batch_txt_embs, batch_tokenized_texts["input_ids"], batch_tokenized_texts["attention_mask"])
-                    else:
-                        sparse_texts = model(batch_txt_embs)
-
-                    sparse_imgs = model(batch_img_embs)
-                    logits_per_image = sparse_imgs @ sparse_texts.t()
-                    logits_per_text = logits_per_image.t()
-                    with torch.no_grad():
-                        scores_dense_i2t = batch_img_embs @ batch_txt_embs.t()
-                        prob_dense_i2t = torch.softmax(
-                            scores_dense_i2t/temp, dim=1)
-                        prob_dense_t2i = torch.softmax(
-                            scores_dense_i2t.t()/temp, dim=1)
-                    loss = (loss_img(logits_per_image, prob_dense_i2t) +
-                            loss_txt(logits_per_text, prob_dense_t2i))/2
-                    reg = (q_regularizer(sparse_texts) +
-                           d_regularizer(sparse_imgs))/2
-                    batch_rel_loss += loss.item()
-                    batch_reg += reg
-                    loss += reg
-                    batch_loss += loss.item()
-                    q_len.append((sparse_texts > 0).float().sum(dim=-1).mean())
-                    d_len.append((sparse_imgs > 0).float().sum(dim=-1).mean())
-                scaler.scale(loss).backward()
-                scaler.step(optimizer1)
-                scaler.step(optimizer2)
-                scaler.update()
-                scheduler1.step()
-                scheduler2.step()
-                q_regularizer.step()
-                d_regularizer.step()
-                i += 1
-            batch_loss = batch_loss / len(train_dataloader)
-            batch_rel_loss = batch_rel_loss/len(train_dataloader)
-            batch_reg = batch_reg / len(train_dataloader)
-            losses.append(batch_loss)
-            recall1, recall5, recall10, mrr10, avg_flops = evaluate(
-                model, val_text_collection, val_image_collection, val_qrels, vector_collator, mask_ratio=mask_ratio)
-            if recall1 > highest_recall_1:
-                highest_recall_1 = recall1
-                print(f"Obtained higher recall@1: {highest_recall_1}")
-                print(f"Saving checkpoint to {model_path}")
-                torch.save(model.state_dict(), model_path)
-
-            print(
-                f"Epoch {epoch_idx+1} R@1 {recall1} R@5 {recall5} R@10 {recall10} loss {batch_loss} rel_loss {batch_rel_loss} reg {batch_reg} q_len {sum(q_len)/len(q_len)} d_len {sum(d_len)/len(d_len)} avg_flops {avg_flops}")
-            if args.mask_ratio < 0:
-                mask_ratio = torch.relu(mask_ratio-step)
-            eval_metrics[0].append(recall1)
-            eval_metrics[1].append(recall5)
-            eval_metrics[2].append(recall10)
-        return highest_recall_1
     highest_recall_1 = 0
-    highest_recall_1 = train(args.epochs, highest_recall_1,
-                             masking=False)
-    print("")
-    print("Done training")
-    print(losses)
-    print("R@1: ", eval_metrics[0])
-    print("R@5: ", eval_metrics[1])
-    print("R@10: ", eval_metrics[2])
-    print(
-        f"Loading best checkpoint from {model_path}")
+    highest_recall_1 = train(model, train_dataloader, val_dataset,
+                             args.num_epochs, loss, optimizer, scheduler, scaler, highest_recall_1)
+    print("\nDone training")
+    print(f"Loading best checkpoint from {model_path}")
     model.load_state_dict(torch.load(model_path))
-    if args.mask_ratio >= 0:
-        mask_ratio = torch.tensor(args.mask_ratio)
-    else:
-        mask_ratio = torch.tensor(0.0)
-    print(f"Perform test evaluation with mask ratio = {args.mask_ratio}")
-
+    mask_ratio = torch.tensor(0.0)
+    print(f"Perform test evaluation.")
     test_sparse_run, test_r1, test_r5, test_r10, test_mrr10, avg_flops = evaluate(
-        model, test_text_collection, test_image_collection, test_qrels, vector_collator, return_run_file=True, mask_ratio=mask_ratio)
+        model, test_dataset, vector_collator, return_run_file=True, mask_ratio=mask_ratio)
     run_file_path = model_dir/"test_run_file.trec"
     print(f"Saving test run file to {run_file_path}")
     write_trec_file(test_sparse_run, run_file_path)
     result_path = model_dir/"test_result.txt"
     print(f"Saving test metrics to {result_path}")
-    corr_res = cal_correaltion(test_sparse_run, test_dense_run, test_qrels)
+    corr_res = cal_correaltion(
+        test_sparse_run, test_dense_run, test_dataset[2])
     with open(result_path, "w") as f:
         f.write(f"R@1: {test_r1}\n")
         f.write(f"R@5: {test_r5}\n")
