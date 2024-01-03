@@ -33,7 +33,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
     batch_dense = batch["emb"].to(device)
     with torch.no_grad():
         batch_sparse = model(batch_dense)
-        max_k = 100  # (batch_sparse > 0).sum(dim=1).max().item()
+        max_k = (batch_sparse > 0).sum(dim=1).max().item()
         batch_topk_indices, batch_topk_weights = batch_sparse.topk(
             max_k, dim=1)
     for (img_id, topk_indices, topk_weights) in zip(batch_ids, batch_topk_indices, batch_topk_weights):
@@ -41,6 +41,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
         topk_toks = tokenizer.convert_ids_to_tokens(topk_indices)
         sparse_images.append(
             {"docno": img_id, "toks": dict(zip(topk_toks, topk_weights))})
+    break
 
 sparse_texts = []
 for batch in tqdm(text_dataloader, desc="Encode texts"):
@@ -48,7 +49,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
     batch_dense = batch["emb"].to(device)
     with torch.no_grad():
         batch_sparse = model(batch_dense)
-        max_k = 100  # (batch_sparse > 0).sum(dim=1).max().item()
+        max_k = (batch_sparse > 0).sum(dim=1).max().item()
         batch_topk_indices, batch_topk_weights = batch_sparse.topk(
             max_k, dim=1)
     for (img_id, topk_indices, topk_weights) in zip(batch_ids, batch_topk_indices, batch_topk_weights):
@@ -56,6 +57,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
         topk_toks = tokenizer.convert_ids_to_tokens(topk_indices)
         sparse_texts.append(
             {"docno": img_id, "toks": dict(zip(topk_toks, topk_weights))})
+    break
 
 index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
 index = PisaIndex(index_name, stemmer='none')
