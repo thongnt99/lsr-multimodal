@@ -4,4 +4,5 @@ datasets>=2.15.0
 ir_measures 
 torch>=2.1.1
 numpy
+scipy
 tokenizers>=0.10.3
