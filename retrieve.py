@@ -28,7 +28,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
     batch_dense = batch["emb"].to(device)
     with torch.no_grad():
         batch_sparse = model(batch_dense)
-        max_k = (batch_sparse > 0).float().sum(dim=1).max()
+        max_k = (batch_sparse > 0).float().sum(dim=1).max().item()
         batch_topk_indices, batch_topk_weights = batch_sparse.topk(
             max_k, dim=1)
     for (img_id, topk_indices, topk_weights) in zip(batch_ids, batch_topk_indices, batch_topk_weights):
