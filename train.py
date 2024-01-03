@@ -53,9 +53,9 @@ def train(model: D2SModel, train_dataloader, val_dataset, num_epochs, loss_fnc: 
         for idx, batch in enumerate(tqdm(train_dataloader, desc="Training batch")):
             optimizer.zero_grad()
             batch_tokenized_texts, dense_texts, dense_imgs = batch
-            batch_tokenized_texts = batch_tokenized_texts.to("cuda")
-            dense_texts = dense_texts.to("cuda")
-            dense_imgs = dense_imgs.to("cuda")
+            batch_tokenized_texts = batch_tokenized_texts.to(device)
+            dense_texts = dense_texts.to(device)
+            dense_imgs = dense_imgs.to(device)
             with torch.cuda.amp.autocast(enabled=args.use_amp):
                 if torch.bernoulli(mask_ratio) == 1:
                     sparse_texts = model(
@@ -106,23 +106,23 @@ def evaluate(model, dataset, shared_collator, mask_ratio=torch.tensor(0.0), retu
     for batch_texts in tqdm(text_dataloader, desc="Encoding texts"):
         text_ids.extend(batch_texts[0])
         if dense:
-            all_text_embs.append(batch_texts[2].to("cuda"))
+            all_text_embs.append(batch_texts[2].to(device))
         else:
             with torch.no_grad(), torch.cuda.amp.autocast(enabled=args.use_amp):
                 if torch.bernoulli(mask_ratio) == 1:
-                    batch_text_embs = model(batch_texts[2].to("cuda"), batch_texts[1]["input_ids"].to(
-                        "cuda"), batch_texts[1]["attention_mask"].to("cuda"))
+                    batch_text_embs = model(batch_texts[2].to(device), batch_texts[1]["input_ids"].to(
+                        device), batch_texts[1]["attention_mask"].to(device))
                 else:
                     batch_text_embs = model(
-                        batch_texts[2].to("cuda")).to("cuda")
+                        batch_texts[2].to(device)).to(device)
                 all_text_embs.append(batch_text_embs)
     for batch_images in tqdm(img_dataloader, desc="Encoding images"):
         image_ids.extend(batch_images[0])
         if dense:
-            all_image_embs.append(batch_images[1].to("cuda"))
+            all_image_embs.append(batch_images[1].to(device))
         else:
             with torch.no_grad(), torch.cuda.amp.autocast(enabled=args.use_amp):
-                batch_img_embs = model(batch_images[1].to("cuda"))
+                batch_img_embs = model(batch_images[1].to(device))
                 all_image_embs.append(batch_img_embs)
     scores = []
     flops = 0
@@ -219,7 +219,7 @@ def prepare_data(dataset_repo):
 
 if __name__ == "__main__":
     model = D2SModel()
-    model.to("cuda")
+    model.to(device)
     train_dataset, val_dataset, test_dataset = prepare_data(
         args.data)
     tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(
         train_dataset, shuffle=True, batch_size=args.train_batch_size, num_workers=18, collate_fn=vector_collator)
     temp = nn.Parameter(torch.tensor(
-        args.temp, requires_grad=True, device="cuda"))
+        args.temp, requires_grad=True, device=device))
     optimizer = torch.optim.AdamW(
         [
             {"params": list(model.vocab_layer_norm.parameters()) +
@@ -258,7 +258,7 @@ if __name__ == "__main__":
                              args.epochs, loss, optimizer, scheduler, scaler, highest_recall_1)
     print("\nDone training")
     print(f"Loading best checkpoint from {model_path}")
-    model = D2SModel.from_pretrained(model_path)
+    model = D2SModel.from_pretrained(model_path).to(device)
     mask_ratio = torch.tensor(0.0)
     print(f"Perform test evaluation.")
     test_sparse_run, test_r1, test_r5, test_r10, test_mrr10, avg_flops = evaluate(
