@@ -50,7 +50,7 @@ The input image (ID=2):
 ![alt text](./sample_images/COCO_val2014_000000184613.jpg)
 
 The expected output: 
-```json
+```javascript
 {
     'animals': 1.6845930814743042,
     'boy': 1.6150918006896973,
