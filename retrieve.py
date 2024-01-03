@@ -44,7 +44,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
             {"docno": img_id, "toks": {tok: w for tok, w in zip(topk_toks, topk_weights) if w > 0}})
 print(sparse_images[0])
 index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
-index = PisaIndex(index_name, stemmer='none')
+index = PisaIndex(index_name, stemmer='none', threads=1)
 indexer = index.toks_indexer(mode="overwrite")
 indexer.index(sparse_images)
 sparse_texts = []
