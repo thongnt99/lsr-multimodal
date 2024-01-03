@@ -6,7 +6,7 @@ import torch
 class D2SConfig(PretrainedConfig):
     model_type = "d2s"
 
-    def __init__(self, mlm_head="distilbert-based-uncased", dense_size=256, **kwargs):
+    def __init__(self, mlm_head="distilbert-base-uncased", dense_size=256, **kwargs):
         self.mlm_head = mlm_head
         self.dense_size = dense_size
         super().__init__(**kwargs)
