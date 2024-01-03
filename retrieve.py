@@ -10,7 +10,7 @@ parser.add_argument("--data", type=str,
 parser.add_argument("--batch_size", type=int,
                     default=1024, help="eval batch size")
 parser.add_argument(
-    "--model", type="str", default="lsr42/d2s_mscoco-blip-dense_q_reg_0.001_d_reg_0.001")
+    "--model", type=str, default="lsr42/d2s_mscoco-blip-dense_q_reg_0.001_d_reg_0.001")
 args = parser.parse_args()
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
