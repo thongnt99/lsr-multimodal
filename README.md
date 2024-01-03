@@ -76,7 +76,9 @@ The expected output:
     'ox': 1.0318571329116821
 }
 ```
-Note: The actual association between *image_id* and and *the actual image path* in the dataset is stored in the `dataset_meta.json` file in each data repository, for example [here](https://huggingface.co/datasets/lsr42/mscoco-blip-dense/blob/main/dataset_meta.json) with the mscoco dataset. 
+Note: 
+- The actual association between *image_id* and and *the actual image path* in the dataset is stored in the `dataset_meta.json` file in each data repository, for example [here](https://huggingface.co/datasets/lsr42/mscoco-blip-dense/blob/main/dataset_meta.json) with the mscoco dataset. 
+- Some other pretrained checkpoints are available in HuggingFace ([here](https://huggingface.co/lsr42?search_models=d2s)).
 
 ## Citing and Authors
 If you find this repository helpful, please cite our paper [Multi-Modal Learned Sparse Retrieval with Probabilistic Expansion Control](link-to-be-updated)
