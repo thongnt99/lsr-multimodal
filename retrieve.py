@@ -63,3 +63,5 @@ index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_
 index = PisaIndex(index_name, stemmer='none')
 indexer = index.toks_indexer()
 indexer.index(sparse_images)
+lsr_searcher = index.quantized()
+res = lsr_searcher(sparse_texts)
