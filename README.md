@@ -41,7 +41,7 @@ example = load_dataset("lsr42/mscoco-blip-dense", data_files = {"img_embs": "img
 with torch.no_grad():
     sparse_dense = model(torch.tensor(example["emb"]).unsqueeze(0)).squeeze()
     
-# decoding sparse outputs to bag of words 
+# converting sparse output vector to a bag of words 
 tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
 weights, indices = sparse_dense.topk(20)
 tokens = tokenizer.convert_ids_to_tokens(indices)
