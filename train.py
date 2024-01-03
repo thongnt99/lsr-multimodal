@@ -32,8 +32,6 @@ parser.add_argument("--temp", type=float,
                     default=1e-3, help="eval batch size")
 parser.add_argument("--use_amp", action="store_true")
 parser.add_argument("--epochs", type=int, default=200)
-parser.add_argument("--model", type=str, default="blip",
-                    help="Selecting models")
 parser.add_argument("--q_reg", type=float, default=2e-2,
                     help="Learning rate for sparse projectors")
 parser.add_argument("--d_reg", type=float, default=2e-2,
@@ -237,7 +235,7 @@ if __name__ == "__main__":
         [
             {"params": list(model.vocab_layer_norm.parameters()) +
              list(model.vocab_projector.parameters()), "lr": 5e-5, "betas": (0.9, 0.999), "weight_decay": 0.0},
-            {"params": list(model.proj.prameters()) + [temp], "lr": 1e-3}
+            {"params": list(model.proj.parameters()) + [temp], "lr": 1e-3}
         ],
         eps=1e-8,
         betas=(0.9, 0.999),
