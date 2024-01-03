@@ -51,7 +51,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
             max_k, dim=1)
         batch_topk_toks = [tokenizer.convert_ids_to_tokens(
             list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
-        image_ids.extend(batch_ids.tolist())
+        image_ids.extend(batch_ids)
         image_topk_toks.extend(batch_topk_toks)
         image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
 with Pool(18) as p:
@@ -84,7 +84,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
             max_k, dim=1)
     batch_topk_toks = [tokenizer.convert_ids_to_tokens(
         list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
-    text_ids.extend(batch_ids.tolist())
+    text_ids.extend(batch_ids)
     text_topk_toks.extend(batch_topk_toks)
     text_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
 with Pool(18) as p:
