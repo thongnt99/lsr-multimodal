@@ -55,7 +55,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
         image_topk_toks.extend(batch_topk_toks)
         image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
 with Pool(18) as p:
-    sparse_images = p.map(create_json_doc, list(
+    sparse_images = p.starmap(create_json_doc, list(
         zip(image_ids, image_topk_toks, image_topk_weights)))
 
 index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
@@ -88,7 +88,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
     text_topk_toks.extend(batch_topk_toks)
     text_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
 with Pool(18) as p:
-    sparse_texts = p.map(create_json_query, list(
+    sparse_texts = p.starmap(create_json_query, list(
         zip(text_ids, text_topk_toks, text_topk_weights)))
 
 lsr_searcher = index.quantized()
