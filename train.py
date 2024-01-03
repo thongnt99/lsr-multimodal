@@ -258,7 +258,7 @@ if __name__ == "__main__":
     model_path = model_dir/"model"
     highest_recall_1 = 0
     highest_recall_1 = train(model, train_dataloader, val_dataset,
-                             args.num_epochs, loss, optimizer, scheduler, scaler, highest_recall_1)
+                             args.epochs, loss, optimizer, scheduler, scaler, highest_recall_1)
     print("\nDone training")
     print(f"Loading best checkpoint from {model_path}")
     model = D2SModel.from_pretrained(model_path)
