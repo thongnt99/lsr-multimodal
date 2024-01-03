@@ -1,3 +1,4 @@
+from multiprocessing import Pool
 import argparse
 import torch
 from datasets import load_dataset
@@ -48,13 +49,19 @@ index = PisaIndex(index_name, stemmer='none', threads=1)
 indexer = index.toks_indexer(mode="overwrite")
 indexer.index(sparse_images)
 sparse_texts = []
+
+
+def create_json_file(batch_ids, topk_toks, topk_weights):
+    pass
+
+
 for batch in tqdm(text_dataloader, desc="Encode texts"):
     batch_ids = batch["id"]
     batch_dense = batch["emb"].to(device)
     with torch.no_grad():
         batch_sparse = model(batch_dense)
         max_k = (batch_sparse > 0).sum(dim=1).max().item()
-        batch_topk_indices, batch_topk_weights = batch_sparse.topk(
+        batch_topk_weights, batch_topk_indices = batch_sparse.topk(
             max_k, dim=1)
     for (img_id, topk_indices, topk_weights) in zip(batch_ids, batch_topk_indices, batch_topk_weights):
         topk_weights = topk_weights.to("cpu").tolist()
