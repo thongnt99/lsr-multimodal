@@ -264,7 +264,6 @@ if __name__ == "__main__":
     test_sparse_run, test_r1, test_r5, test_r10, test_mrr10, avg_flops = evaluate(
         model, test_dataset, vector_collator, return_run_file=True, mask_ratio=mask_ratio)
     run_file_path = model_dir/"test_run_file.trec"
-    print(f"Saving test run file to {run_file_path}")
     write_trec_file(test_sparse_run, run_file_path)
     result_path = model_dir/"test_result.txt"
     print(f"Saving test metrics to {result_path}")
