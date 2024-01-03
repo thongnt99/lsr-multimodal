@@ -43,6 +43,10 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
         sparse_images.append(
             {"docno": img_id, "toks": {tok: w for tok, w in zip(topk_toks, topk_weights) if w > 0}})
 print(sparse_images[0])
+index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
+index = PisaIndex(index_name, stemmer='none')
+indexer = index.toks_indexer(mode="overwrite")
+indexer.index(sparse_images)
 sparse_texts = []
 for batch in tqdm(text_dataloader, desc="Encode texts"):
     batch_ids = batch["id"]
@@ -57,10 +61,6 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
         topk_toks = tokenizer.convert_ids_to_tokens(topk_indices)
         sparse_texts.append(
             {"qid": img_id, "query_toks": dict(zip(topk_toks, topk_weights))})
-index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
-index = PisaIndex(index_name, stemmer='none')
-indexer = index.toks_indexer(mode="overwrite")
-indexer.index(sparse_images)
 lsr_searcher = index.quantized()
 start = time.time()
 res = lsr_searcher(sparse_texts)
