@@ -32,14 +32,16 @@ from model import D2SModel
 import torch 
 from transformers import AutoTokenizer 
 from datasets import load_dataset
+
 # load a pretrained model 
 model = D2SModel.from_pretrained("lsr42/d2s_mscoco-blip-dense_q_reg_0.001_d_reg_0.001")
+
 # run inference on an example 
 example = load_dataset("lsr42/mscoco-blip-dense", data_files = {"img_embs": "img_embs.parquet"})['img_embs'][2]
 with torch.no_grad():
     sparse_dense = model(torch.tensor(example["emb"]).unsqueeze(0)).squeeze()
+    
 # decoing sparse outputs to bag of words 
-
 tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
 weights, indices = sparse_dense.topk(20)
 tokens = tokenizer.convert_ids_to_tokens(indices)
