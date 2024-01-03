@@ -59,7 +59,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
             {"qid": img_id, "query_toks": dict(zip(topk_toks, topk_weights))})
 index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
 index = PisaIndex(index_name, stemmer='none')
-indexer = index.toks_indexer()
+indexer = index.toks_indexer(mode="overwrite")
 indexer.index(sparse_images)
 lsr_searcher = index.quantized()
 start = time.time()
@@ -67,5 +67,5 @@ res = lsr_searcher(sparse_texts)
 end = time.time()
 total_time = end - start
 print(f"Total running time: {total_time} seconds")
-print(f"q/s: {total_time*1.0/len(sparse_texts)}")
-print(f"s/q: {len(sparse_texts)*1.0/total_time}")
+print(f"s/q: {total_time*1.0/len(sparse_texts)}")
+print(f"q/s: {len(sparse_texts)*1.0/total_time}")
