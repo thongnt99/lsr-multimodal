@@ -56,7 +56,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
         topk_weights = topk_weights.to("cpu").tolist()
         topk_toks = tokenizer.convert_ids_to_tokens(topk_indices)
         sparse_texts.append(
-            {"qid": img_id, "toks": dict(zip(topk_toks, topk_weights))})
+            {"qid": img_id, "query_toks": dict(zip(topk_toks, topk_weights))})
     break
 
 index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
