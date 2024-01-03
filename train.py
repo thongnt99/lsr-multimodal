@@ -15,7 +15,7 @@ from collections import OrderedDict
 import torch.nn.functional as F
 from regularizer import *
 from dataset import *
-from model import MLM
+from model import D2SModel
 from pathlib import Path
 from utils import write_trec_file
 from utils import cal_correaltion
@@ -42,7 +42,7 @@ args = parser.parse_args()
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
-def train(model, train_dataloader, val_dataset, num_epochs, loss: BICELoss,  optimizer, scheduler, grad_scaler, highest_recall_1):
+def train(model: D2SModel, train_dataloader, val_dataset, num_epochs, loss: BICELoss,  optimizer, scheduler, grad_scaler, highest_recall_1):
     if args.mask_ratio >= 0:
         mask_ratio = torch.tensor(args.mask_ratio)
     else:
@@ -90,8 +90,7 @@ def train(model, train_dataloader, val_dataset, num_epochs, loss: BICELoss,  opt
             highest_recall_1 = recall1
             print(f"Obtained higher recall@1: {highest_recall_1}")
             print(f"Saving checkpoint to {model_path}")
-            torch.save(model.state_dict(), model_path)
-
+            model.save_pretrained(model_path)
         print(
             f"Epoch {epoch_idx+1} R@1 {recall1} R@5 {recall5} R@10 {recall10} loss {batch_loss} rel_loss {batch_rel_loss} reg {batch_reg} q_len {sum(q_len)/len(q_len)} d_len {sum(d_len)/len(d_len)} avg_flops {avg_flops}")
         mask_ratio = torch.relu(mask_ratio-step)
@@ -224,7 +223,7 @@ def prepare_data(dataset_repo):
 
 
 if __name__ == "__main__":
-    model = MLM(256)
+    model = D2SModel()
     model.to("cuda")
     train_dataset, val_dataset, test_dataset = prepare_data(
         args.data)
@@ -258,13 +257,13 @@ if __name__ == "__main__":
     model_dir = Path(
         f"output/{args.data}_qreg_{args.q_reg}_dreg_{args.d_reg}_tmp.tuned_{args.temp}")
     model_dir.mkdir(exist_ok=True, parents=True)
-    model_path = model_dir/"model.pt"
+    model_path = model_dir/"model"
     highest_recall_1 = 0
     highest_recall_1 = train(model, train_dataloader, val_dataset,
                              args.num_epochs, loss, optimizer, scheduler, scaler, highest_recall_1)
     print("\nDone training")
     print(f"Loading best checkpoint from {model_path}")
-    model.load_state_dict(torch.load(model_path))
+    model = D2SModel.from_pretrained(model_path)
     mask_ratio = torch.tensor(0.0)
     print(f"Perform test evaluation.")
     test_sparse_run, test_r1, test_r5, test_r10, test_mrr10, avg_flops = evaluate(
