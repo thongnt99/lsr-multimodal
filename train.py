@@ -40,12 +40,9 @@ args = parser.parse_args()
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 
-def train(model: D2SModel, train_dataloader, val_dataset, num_epochs, loss: BICELoss,  optimizer, scheduler, grad_scaler, highest_recall_1):
-    if args.mask_ratio >= 0:
-        mask_ratio = torch.tensor(args.mask_ratio)
-    else:
-        mask_ratio = torch.tensor(1.0)
-        step = mask_ratio/(num_epochs*0.95)
+def train(model: D2SModel, train_dataloader, val_dataset, num_epochs, loss: BICELoss,  optimizer, scheduler, scaler, highest_recall_1):
+    mask_ratio = torch.tensor(1.0)
+    step = mask_ratio/(num_epochs*0.95)
     for epoch_idx, epoch in enumerate(range(0, num_epochs)):
         i = 0
         batch_loss = 0
