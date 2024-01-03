@@ -14,7 +14,7 @@ dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
 index = faiss.IndexHNSWFlat(256, 32, 0)
 index.train(dataset["img_emb"]["emb"])
 index.add(dataset["img_emb"]["emb"])
-queries = dataset["text_embs"]["emb"]
+queries = dataset["text_emb"]["emb"]
 start = time.time()
 D, I = index.search(queries, 1000)
 end = time.time()
