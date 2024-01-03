@@ -16,9 +16,16 @@ device = "cuda:0" if torch.cuda.is_available() else "cpu"
 dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
                                               "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("torch")
 img_dataloader = DataLoader(dataset["img_emb"], batch_size=args.batch_size)
+text_dataloader = DataLoader(dataset["text_emb"], batch_size=args.batch_size)
+
 model = D2SModel.from_pretrained(args.model).to(device)
 
 for batch in tqdm(img_dataloader, desc="Encode images"):
+    batch_ids = batch["id"]
+    batch_dense = batch["emb"].to(device)
+    batch_sparse = model(batch_dense)
+
+for batch in tqdm(text_dataloader, desc="Encode texts"):
     batch_ids = batch["id"]
     batch_dense = batch["emb"].to(device)
     batch_sparse = model(batch_dense)
