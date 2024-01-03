@@ -42,7 +42,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
         sparse_images.append(
             {"docno": img_id, "toks": dict(zip(topk_toks, topk_weights))})
 
-sparse_texts = {}
+sparse_texts = []
 for batch in tqdm(text_dataloader, desc="Encode texts"):
     batch_ids = batch["id"]
     batch_dense = batch["emb"].to(device)
