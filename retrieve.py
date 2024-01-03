@@ -4,6 +4,7 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 from model import D2SModel
 from tqdm import tqdm
+from transformers import AutoTokenizer
 parser = argparse.ArgumentParser(description="LSR Index Pisa")
 parser.add_argument("--data", type=str,
                     default="lsr42/mscoco-blip-dense")
