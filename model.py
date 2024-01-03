@@ -1,13 +1,24 @@
 from torch import nn
-from transformers import AutoModelForMaskedLM
+from transformers import AutoModelForMaskedLM, AutoModel, AutoConfig, PretrainedConfig, PreTrainedModel
 import torch
 
 
-class MLM(nn.Module):
-    def __init__(self, dense_size):
-        super().__init__()
-        model = AutoModelForMaskedLM.from_pretrained("distilbert-base-uncased")
-        self.proj = nn.Linear(dense_size, model.config.hidden_size)
+class D2SConfig(PretrainedConfig):
+    model_type = "d2s"
+
+    def __init__(self, mlm_head="distilbert-based-uncased", dense_size=256, **kwargs):
+        self.mlm_head = mlm_head
+        self.dense_size = dense_size
+        super().__init__(**kwargs)
+
+
+class D2SModel(PreTrainedModel):
+    config_class = D2SConfig
+
+    def __init__(self, config: D2SConfig = D2SConfig()):
+        super().__init__(config)
+        model = AutoModelForMaskedLM.from_pretrained(config.mlm_head)
+        self.proj = nn.Linear(config.dense_size, model.config.hidden_size)
         self.vocab_layer_norm = model.vocab_layer_norm
         self.vocab_projector = model.vocab_projector
 
@@ -25,3 +36,7 @@ class MLM(nn.Module):
                  input_ids.int()] = weights
             term_importances = term_importances * mask
         return term_importances
+
+
+AutoConfig.register("d2s", D2SConfig)
+AutoModel.register(D2SConfig, D2SModel)
