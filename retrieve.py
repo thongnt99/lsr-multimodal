@@ -2,6 +2,7 @@ from multiprocessing import Pool
 import argparse
 import torch
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 from torch.utils.data import DataLoader
 from model import D2SModel
 from tqdm import tqdm
@@ -11,6 +12,7 @@ if not pt.started():
     pt.init()
 from pyterrier_pisa import PisaIndex
 import time
+import json
 
 parser = argparse.ArgumentParser(description="LSR Index Pisa")
 parser.add_argument("--data", type=str,
@@ -21,15 +23,6 @@ parser.add_argument(
     "--model", type=str, default="lsr42/d2s_mscoco-blip-dense_q_reg_0.001_d_reg_0.001")
 args = parser.parse_args()
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
-dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
-                                              "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("torch")
-
-img_dataloader = DataLoader(dataset["img_emb"], batch_size=args.batch_size)
-text_dataloader = DataLoader(dataset["text_emb"], batch_size=args.batch_size)
-
-model = D2SModel.from_pretrained(args.model).to(device)
-tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-sparse_images = []
 
 
 def create_json_doc(doc_id, topk_toks, topk_weights):
@@ -38,6 +31,21 @@ def create_json_doc(doc_id, topk_toks, topk_weights):
     return doc
 
 
+def create_json_query(query_id, topk_toks, topk_weights):
+    query = {"qid": query_id, "query_toks": {tok: w for tok,
+                                             w in zip(topk_toks, topk_weights) if w > 0}}
+    return query
+
+
+dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
+                                              "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("torch")
+
+img_dataloader = DataLoader(dataset["img_emb"], batch_size=args.batch_size)
+text_dataloader = DataLoader(dataset["text_emb"], batch_size=args.batch_size)
+model = D2SModel.from_pretrained(args.model).to(device)
+tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+
+sparse_images = []
 image_ids = []
 image_topk_toks = []
 image_topk_weights = []
@@ -65,11 +73,14 @@ indexer.index(sparse_images)
 sparse_texts = []
 
 
-def create_json_query(query_id, topk_toks, topk_weights):
-    query = {"qid": query_id, "query_toks": {tok: w for tok,
-                                             w in zip(topk_toks, topk_weights) if w > 0}}
-    return query
+meta_data = json.load(open(hf_hub_download(
+    repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
 
+id2text = {}
+for image in tqdm(meta_data['images'], desc="Processing meta data."):
+    captions = [sent["raw"] for sent in image["sentences"]]
+    caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
+    id2text.update(dict(zip(captions, caption_ids)))
 
 text_ids = []
 text_topk_toks = []
@@ -87,14 +98,24 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
     text_ids.extend(batch_ids)
     text_topk_toks.extend(batch_topk_toks)
     text_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
+    break
 with Pool(18) as p:
     sparse_texts = p.starmap(create_json_query, list(
         zip(text_ids, text_topk_toks, text_topk_weights)))
+sparse_texts_no_expansion = []
+for st in sparse_texts:
+    qid = st["qid"]
+    qtext = id2text[qid]
+    tokens = tokenizer.tokenize(qtext)
+    toks = {tok: st["query_toks"][tok]
+            for tok in tokens if tok in st["query_toks"]}
+    sparse_texts_no_expansion.append({"qid": qid, "query_toks": toks})
 
 print(sparse_texts[0])
+print(sparse_texts_no_expansion[0])
 lsr_searcher = index.quantized()
 start = time.time()
-res = lsr_searcher(sparse_texts)
+res = lsr_searcher(sparse_texts_no_expansion)
 end = time.time()
 total_time = end - start
 print(f"Total running time: {total_time} seconds")
