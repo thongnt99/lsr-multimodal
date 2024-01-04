@@ -145,7 +145,7 @@ else:
     start = time.time()
     res = lsr_searcher(sparse_texts_no_expansion)
     if args.mode == "hybrid":
-        for row in res.iterrows():
+        for idx, row in res.iterrows():
             if row["rank"] < 100:
                 sparse_text = text_forward[row["qid"]]
                 sparse_img = image_forward[row["docno"]]
