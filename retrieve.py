@@ -39,7 +39,6 @@ def create_json_query(query_id, topk_toks, topk_weights):
 
 dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
                                               "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("torch")
-
 img_dataloader = DataLoader(dataset["img_emb"], batch_size=args.batch_size)
 text_dataloader = DataLoader(dataset["text_emb"], batch_size=args.batch_size)
 model = D2SModel.from_pretrained(args.model).to(device)
@@ -47,6 +46,7 @@ tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
 
 sparse_images = []
 image_ids = []
+image_outputs = []
 image_topk_toks = []
 image_topk_weights = []
 for batch in tqdm(img_dataloader, desc="Encode images"):
@@ -61,7 +61,9 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
             list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
         image_ids.extend(batch_ids)
         image_topk_toks.extend(batch_topk_toks)
-        image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
+        image_topk_weights.extend(list(batch_topk_weights.to("cpu")))
+        image_outputs.append(batch_sparse.to("cpu"))
+image_outputs = torch.cat(image_outputs, 0)
 with Pool(18) as p:
     sparse_images = p.starmap(create_json_doc, list(
         zip(image_ids, image_topk_toks, image_topk_weights)))
@@ -83,6 +85,7 @@ for image in tqdm(meta_data['images'], desc="Processing meta data."):
 
 text_ids = []
 text_topk_toks = []
+text_outputs = []
 text_topk_weights = []
 for batch in tqdm(text_dataloader, desc="Encode texts"):
     batch_ids = batch["id"]
@@ -97,6 +100,7 @@ for batch in tqdm(text_dataloader, desc="Encode texts"):
     text_ids.extend(batch_ids)
     text_topk_toks.extend(batch_topk_toks)
     text_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
+    text_outputs.append(batch_sparse.to("cpu"))
     break
 with Pool(18) as p:
     sparse_texts = p.starmap(create_json_query, list(
@@ -112,8 +116,10 @@ for st in sparse_texts:
 
 print(sparse_texts[0])
 print(sparse_texts_no_expansion[0])
-qid2rep = {st["qid"]: st["query_toks"] for st in sparse_texts}
-did2rep = {si["docno"]: si["toks"] for si in sparse_images}
+# qid2rep = {st["qid"]: st["query_toks"] for st in sparse_texts}
+# did2rep = {si["docno"]: si["toks"] for si in sparse_images}
+qid2index = dict(zip(text_ids, range(len(text_ids))))
+did2index = dict(zip(image_ids, range(len(image_ids))))
 lsr_searcher = index.quantized()
 start = time.time()
 res = lsr_searcher(sparse_texts_no_expansion)
@@ -123,12 +129,10 @@ for idx, pair in res.iterrows():
     else:
         query_id = pair["qid"]
         doc_id = pair["docno"]
-        score = 0
-        sparse_query = qid2rep[query_id]
-        sparse_doc = did2rep[doc_id]
-        for tok in sparse_query:
-            if tok in sparse_doc:
-                score += sparse_query[tok]*sparse_doc[tok]
+        qi = qid2index[query_id]
+        di = did2index[doc_id]
+        score = (qi * di).sum()
+
 end = time.time()
 total_time = end - start
 print(f"Total running time: {total_time} seconds")
