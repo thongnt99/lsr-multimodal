@@ -129,9 +129,9 @@ class ForwardScorer:
             self.text_tok_indices.append(np.array(tok_ids))
             self.text_tok_weights.append(np.array(tok_weights))
         max_tok = 0
-        for idx, stext in tqdm(sparse_images, desc="building forward index"):
-            self.img_2_row[stext["docno"]] = idx
-            tok2w = stext["toks"]
+        for idx, simg in tqdm(sparse_images, desc="building forward index"):
+            self.img_2_row[simg["docno"]] = idx
+            tok2w = simg["toks"]
             toks = list(tok2w.keys())
             tok_weights = list(tok2w.values())
             tok_ids = tokenizer.convert_tokens_to_ids(toks)
