@@ -72,7 +72,6 @@ indexer = index.toks_indexer(mode="overwrite")
 indexer.index(sparse_images)
 sparse_texts = []
 
-
 meta_data = json.load(open(hf_hub_download(
     repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
 
@@ -113,9 +112,23 @@ for st in sparse_texts:
 
 print(sparse_texts[0])
 print(sparse_texts_no_expansion[0])
+qid2rep = {st["qid"]: st["query_toks"] for st in sparse_texts}
+did2rep = {si["docno"]: si["toks"] for si in sparse_images}
 lsr_searcher = index.quantized()
 start = time.time()
 res = lsr_searcher(sparse_texts_no_expansion)
+for pair in res:
+    if pair.rank >= 100:
+        continue
+    else:
+        query_id = pair.qid
+        doc_id = pair.docno
+        score = 0
+        sparse_query = qid2rep[query_id]
+        sparse_doc = did2rep[doc_id]
+        for tok in sparse_query:
+            for tok in sparse_doc:
+                score += sparse_query[tok]*sparse_doc[tok]
 end = time.time()
 total_time = end - start
 print(f"Total running time: {total_time} seconds")
