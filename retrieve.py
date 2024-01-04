@@ -132,10 +132,9 @@ else:
         sparse_texts_no_expansion.append({"qid": qid, "query_toks": toks})
     print(sparse_texts[0])
     print(sparse_texts_no_expansion[0])
-    if args.mode == "no_exp":
-        lsr_searcher = index.quantized(num_results=args.topk)
-    else:
-        lsr_searcher = index.quantized(num_results=1000)
+
+    lsr_searcher = index.quantized(num_results=args.topk)
+    if args.mode == "hybrid":
         image_forward = {}
         text_forward = {}
         for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
@@ -146,14 +145,13 @@ else:
     res = lsr_searcher(sparse_texts_no_expansion)
     if args.mode == "hybrid":
         for idx, row in res.iterrows():
-            if row["rank"] < 100:
-                sparse_text = text_forward[row["qid"]]
-                sparse_img = image_forward[row["docno"]]
-                score = 0
-                for tok in sparse_text:
-                    if tok in sparse_img:
-                        score += sparse_text[tok] * sparse_img[tok]
-                row["score"] = score
+            sparse_text = text_forward[row["qid"]]
+            sparse_img = image_forward[row["docno"]]
+            score = 0
+            for tok in sparse_text:
+                if tok in sparse_img:
+                    score += sparse_text[tok] * sparse_img[tok]
+            row["score"] = score
     end = time.time()
     total_time = end - start
 print(f"Total running time: {total_time} seconds")
