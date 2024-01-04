@@ -118,11 +118,11 @@ lsr_searcher = index.quantized()
 start = time.time()
 res = lsr_searcher(sparse_texts_no_expansion)
 for idx, pair in res.iterrows():
-    if pair.rank >= 100:
+    if pair["rank"] >= 100:
         continue
     else:
-        query_id = pair.qid
-        doc_id = pair.docno
+        query_id = pair["qid"]
+        doc_id = pair["docno"]
         score = 0
         sparse_query = qid2rep[query_id]
         sparse_doc = did2rep[doc_id]
