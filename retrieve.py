@@ -22,6 +22,10 @@ parser.add_argument("--batch_size", type=int,
                     default=1024, help="eval batch size")
 parser.add_argument(
     "--model", type=str, default="lsr42/d2s_mscoco-blip-dense_q_reg_0.001_d_reg_0.001")
+parser.add_argument(
+    "--topk", type=int, default=10)
+parser.add_argument(
+    "--mode", type=str, default="no_exp", help="Retrieval mode: exp, no_exp, hybrid")
 args = parser.parse_args()
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
@@ -46,7 +50,7 @@ model = D2SModel.from_pretrained(args.model).to(device)
 tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
 index_dir = Path(
     f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}")
-index = PisaIndex(index_dir, stemmer='none', threads=1)
+index = PisaIndex(str(index_dir), stemmer='none', threads=1)
 sparse_image_path = index_dir/"sparse_images.json"
 if sparse_image_path.exists():
     sparse_images = json.load(open(sparse_image_path))
@@ -75,15 +79,7 @@ else:
     indexer.index(sparse_images)
     json.dump(sparse_images, open(sparse_image_path, "w"))
 print(sparse_images[0])
-
 sparse_texts = []
-meta_data = json.load(open(hf_hub_download(
-    repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
-id2text = {}
-for image in tqdm(meta_data['images'], desc="Processing meta data."):
-    captions = [sent["raw"] for sent in image["sentences"]]
-    caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
-    id2text.update(dict(zip(caption_ids, captions)))
 sparse_texts_path = index_dir/"sparse_texts.json"
 if sparse_texts_path.exists():
     sparse_texts = json.load(open(sparse_texts_path))
@@ -111,21 +107,55 @@ else:
         sparse_texts = p.starmap(create_json_query, list(
             zip(text_ids, text_topk_toks, text_topk_weights)))
     json.dump(sparse_texts, open(sparse_texts_path, "w"))
-sparse_texts_no_expansion = []
-for st in sparse_texts:
-    qid = st["qid"]
-    qtext = id2text[qid]
-    tokens = tokenizer.tokenize(qtext)
-    toks = {tok: st["query_toks"][tok]
-            for tok in tokens if tok in st["query_toks"]}
-    sparse_texts_no_expansion.append({"qid": qid, "query_toks": toks})
-print(sparse_texts[0])
-print(sparse_texts_no_expansion[0])
-lsr_searcher = index.quantized()
-start = time.time()
-res = lsr_searcher(sparse_texts_no_expansion)
-end = time.time()
-total_time = end - start
+
+if args.mode == "exp":
+    lsr_searcher = index.quantized(num_results=args.topk)
+    start = time.time()
+    res = lsr_searcher(sparse_texts)
+    end = time.time()
+    total_time = end - start
+else:
+    meta_data = json.load(open(hf_hub_download(
+        repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
+    id2text = {}
+    for image in tqdm(meta_data['images'], desc="Processing meta data."):
+        captions = [sent["raw"] for sent in image["sentences"]]
+        caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
+        id2text.update(dict(zip(caption_ids, captions)))
+    sparse_texts_no_expansion = []
+    for st in sparse_texts:
+        qid = st["qid"]
+        qtext = id2text[qid]
+        tokens = tokenizer.tokenize(qtext)
+        toks = {tok: st["query_toks"][tok]
+                for tok in tokens if tok in st["query_toks"]}
+        sparse_texts_no_expansion.append({"qid": qid, "query_toks": toks})
+    print(sparse_texts[0])
+    print(sparse_texts_no_expansion[0])
+    if args.mode == "no_exp":
+        lsr_searcher = index.quantized(num_results=args.topk)
+    else:
+        lsr_searcher = index.quantized(num_results=1000)
+        image_forward = {}
+        text_forward = {}
+        for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
+            image_forward[image["docno"]] = image["toks"]
+        for text in sparse_texts:
+            text_forward[text["qid"]] = text["query_toks"]
+    start = time.time()
+    res = lsr_searcher(sparse_texts_no_expansion)
+    if args.mode == "hybrid":
+        for row in res.iterrows():
+            if row["rank"] < 100:
+                sparse_text = text_forward[row["qid"]]
+                sparse_img = image_forward[row["docno"]]
+                score = 0
+                for tok in sparse_text:
+                    if tok in sparse_img:
+                        score += sparse_text[tok] * sparse_img[tok]
+                row["score"] = score
+    end = time.time()
+    total_time = end - start
 print(f"Total running time: {total_time} seconds")
 print(f"s/q: {total_time*1.0/len(sparse_texts)}")
 print(f"q/s: {len(sparse_texts)*1.0/total_time}")
