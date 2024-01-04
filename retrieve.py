@@ -43,10 +43,8 @@ img_dataloader = DataLoader(dataset["img_emb"], batch_size=args.batch_size)
 text_dataloader = DataLoader(dataset["text_emb"], batch_size=args.batch_size)
 model = D2SModel.from_pretrained(args.model).to(device)
 tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-
 sparse_images = []
 image_ids = []
-image_outputs = []
 image_topk_toks = []
 image_topk_weights = []
 for batch in tqdm(img_dataloader, desc="Encode images"):
@@ -62,27 +60,23 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
         image_ids.extend(batch_ids)
         image_topk_toks.extend(batch_topk_toks)
         image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
-        image_outputs.append(batch_sparse.to("cpu"))
-image_outputs = torch.cat(image_outputs, 0)
 with Pool(18) as p:
     sparse_images = p.starmap(create_json_doc, list(
         zip(image_ids, image_topk_toks, image_topk_weights)))
 print(sparse_images[0])
 index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
-index = PisaIndex(index_name, stemmer='none', threads=8)
+index = PisaIndex(index_name, stemmer='none', threads=1)
 indexer = index.toks_indexer(mode="overwrite")
 indexer.index(sparse_images)
-sparse_texts = []
 
+sparse_texts = []
 meta_data = json.load(open(hf_hub_download(
     repo_id=args.data, repo_type="dataset", filename="dataset_meta.json")))
-
 id2text = {}
 for image in tqdm(meta_data['images'], desc="Processing meta data."):
     captions = [sent["raw"] for sent in image["sentences"]]
     caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
     id2text.update(dict(zip(caption_ids, captions)))
-
 text_ids = []
 text_topk_toks = []
 text_outputs = []
@@ -113,26 +107,11 @@ for st in sparse_texts:
     toks = {tok: st["query_toks"][tok]
             for tok in tokens if tok in st["query_toks"]}
     sparse_texts_no_expansion.append({"qid": qid, "query_toks": toks})
-
 print(sparse_texts[0])
 print(sparse_texts_no_expansion[0])
-# qid2rep = {st["qid"]: st["query_toks"] for st in sparse_texts}
-# did2rep = {si["docno"]: si["toks"] for si in sparse_images}
-qid2index = dict(zip(text_ids, range(len(text_ids))))
-did2index = dict(zip(image_ids, range(len(image_ids))))
 lsr_searcher = index.quantized()
 start = time.time()
 res = lsr_searcher(sparse_texts_no_expansion)
-for idx, pair in res.iterrows():
-    if pair["rank"] >= 100:
-        continue
-    else:
-        query_id = pair["qid"]
-        doc_id = pair["docno"]
-        qi = qid2index[query_id]
-        di = did2index[doc_id]
-        score = (text_outputs[qi] * image_outputs[di]).sum()
-
 end = time.time()
 total_time = end - start
 print(f"Total running time: {total_time} seconds")
