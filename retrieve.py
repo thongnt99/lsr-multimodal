@@ -180,9 +180,13 @@ else:
         image_forward = {}
         text_forward = {}
         for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
-            image_forward[image["docno"]] = image["toks"]
+            image_forward[image["docno"]] = typed.Dict()
+            for tok in image["toks"]:
+                image_forward[image["docno"]][tok] = image["toks"][tok]
         for text in sparse_texts:
-            text_forward[text["qid"]] = text["query_toks"]
+            text_forward[text["qid"]] = typed.Dict()
+            for tok in text["query_toks"]:
+                text_forward[text["qid"]] = text["query_toks"][tok]
 
         @njit
         def score(text, image):
