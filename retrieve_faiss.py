@@ -3,7 +3,7 @@ import torch
 from datasets import load_dataset
 import time
 import faiss
-faiss.omp_set_num_threads(8)
+faiss.omp_set_num_threads(1)
 parser = argparse.ArgumentParser(description="LSR Index Pisa")
 parser.add_argument("--data", type=str,
                     default="lsr42/mscoco-blip-dense")
