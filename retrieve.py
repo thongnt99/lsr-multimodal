@@ -12,6 +12,7 @@ import pyterrier as pt
 if not pt.started():
     pt.init()
 from pyterrier_pisa import PisaIndex
+from scipy.sparse import csr_array
 import time
 import json
 import numpy as np
@@ -114,10 +115,8 @@ class ForwardScorer:
     def __init__(self, tokenizer, sparse_texts, sparse_images):
         self.text_2_row = {}
         self.img_2_row = {}
-        self.text_tok_indices = []
-        self.text_tok_weights = []
-        self.img_tok_indices = []
-        self.img_tok_weights = []
+        self.text_2_reps = {}
+        self.img_2_reps = {}
         max_tok = 0
         for idx, stext in enumerate(tqdm(sparse_texts, desc="building forward index")):
             self.text_2_row[stext["qid"]] = idx
@@ -126,8 +125,12 @@ class ForwardScorer:
             tok_weights = list(tok2w.values())
             tok_ids = tokenizer.convert_tokens_to_ids(toks)
             max_tok = max(max_tok, len(tok_ids))
-            self.text_tok_indices.append(np.array(tok_ids))
-            self.text_tok_weights.append(np.array(tok_weights))
+            row_ind = np.zeros(len(tok_weights))
+            sparse_vec = csr_array(
+                (tok_weights, (row_ind, tok_ids)), shape=(1, 30522))
+            self.text_2_reps.append(sparse_vec)
+            # self.text_tok_indices.append(np.array(tok_ids))
+            # self.text_tok_weights.append(np.array(tok_weights))
         max_tok = 0
         for idx, simg in enumerate(tqdm(sparse_images, desc="building forward index")):
             self.img_2_row[simg["docno"]] = idx
@@ -136,19 +139,18 @@ class ForwardScorer:
             tok_weights = list(tok2w.values())
             tok_ids = tokenizer.convert_tokens_to_ids(toks)
             max_tok = max(max_tok, len(tok_ids))
-            self.img_tok_indices.append(np.array(tok_ids))
-            self.img_tok_weights.append(np.array(tok_weights))
+            row_ind = np.zeros(len(tok_weights))
+            sparse_vec = csr_array(
+                (tok_weights, (row_ind, tok_ids)), shape=(1, 30522))
+            self.img_2_reps.append(sparse_vec)
+
+            # self.img_tok_indices.append(np.array(tok_ids))
+            # self.img_tok_weights.append(np.array(tok_weights))
 
     def score(self, q_id, d_id):
         q_row = self.text_2_row[q_id]
-        qtok_ids = np.expand_dims(self.text_tok_indices[q_row], axis=1)
-        qtok_weights = self.text_tok_weights[q_row]
-        drow = self.img_2_row[d_id]
-        dtok_ids = np.expand_dims(self.img_tok_indices[drow], axis=0)
-        dtok_weights = self.img_tok_weights[drow]
-        mask = (qtok_ids == dtok_ids)
-        x, y = np.nonzero(mask)
-        score = np.dot(qtok_weights[x], dtok_weights[y])
+        d_row = self.img_2_row[d_id]
+        score = self.text_2_reps[q_row] @ self.img_2_reps[d_row]
         return score
 
 
