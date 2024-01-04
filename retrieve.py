@@ -117,7 +117,7 @@ did2rep = {si["docno"]: si["toks"] for si in sparse_images}
 lsr_searcher = index.quantized()
 start = time.time()
 res = lsr_searcher(sparse_texts_no_expansion)
-for pair in res:
+for idx, pair in res.iterrows():
     if pair.rank >= 100:
         continue
     else:
