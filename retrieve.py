@@ -1,3 +1,4 @@
+from numba import jitclass, types, typed
 from pathlib import Path
 from multiprocessing import Pool
 import argparse
@@ -111,46 +112,39 @@ else:
     json.dump(sparse_texts, open(sparse_texts_path, "w"))
 
 
-class ForwardScorer:
-    def __init__(self, tokenizer, sparse_texts, sparse_images):
-        self.text_2_row = {}
-        self.img_2_row = {}
-        self.text_2_reps = []
-        self.img_2_reps = []
-        max_tok = 0
-        for idx, stext in enumerate(tqdm(sparse_texts, desc="building forward index")):
-            self.text_2_row[stext["qid"]] = idx
-            tok2w = stext["query_toks"]
-            toks = list(tok2w.keys())
-            tok_weights = list(tok2w.values())
-            tok_ids = tokenizer.convert_tokens_to_ids(toks)
-            max_tok = max(max_tok, len(tok_ids))
-            row_ind = np.zeros(len(tok_weights))
-            sparse_vec = csr_array(
-                (tok_weights, (row_ind, tok_ids)), shape=(1, 30522))
-            self.text_2_reps.append(sparse_vec)
-            # self.text_tok_indices.append(np.array(tok_ids))
-            # self.text_tok_weights.append(np.array(tok_weights))
-        max_tok = 0
-        for idx, simg in enumerate(tqdm(sparse_images, desc="building forward index")):
-            self.img_2_row[simg["docno"]] = idx
-            tok2w = simg["toks"]
-            toks = list(tok2w.keys())
-            tok_weights = list(tok2w.values())
-            tok_ids = tokenizer.convert_tokens_to_ids(toks)
-            max_tok = max(max_tok, len(tok_ids))
-            col_ind = np.zeros(len(tok_weights))
-            sparse_vec = csr_array(
-                (tok_weights, (tok_ids, col_ind)), shape=(30522, 1))
-            self.img_2_reps.append(sparse_vec)
+spec = [
+    ("image_forward", types.DictType(keyty=types.unicode_type,
+     valty=types.DictType(keyty=types.unicode_type, valty=types.float64))),
+    ("text_forward", types.DictType(keyty=types.unicode_type,
+     valty=types.DictType(keyty=types.unicode_type, valty=types.float64)))
+]
 
-            # self.img_tok_indices.append(np.array(tok_ids))
-            # self.img_tok_weights.append(np.array(tok_weights))
+
+@jitclass(spec)
+class ForwardScorer:
+    def __init__(self,  sparse_texts, sparse_images):
+        self.image_forward = typed.Dict.empty(
+            key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
+        self.text_forward = typed.Dict.empty(
+            key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
+        for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
+            self.image_forward[image["docno"]] = typed.Dict.empty(
+                key_type=types.unicode_type, value_type=types.float64)
+            for tok in image["toks"]:
+                self.image_forward[image["docno"]][tok] = image["toks"][tok]
+            # = image["toks"]
+        for text in sparse_texts:
+            self.text_forward[text["qid"]] = typed.Dict.empty(
+                key_type=types.unicode_type, value_type=types.float64)
+            for tok in text["query_toks"]:
+                self.text_forward[text["qid"]][tok] = text["query_toks"][tok]
 
     def score(self, q_id, d_id):
-        q_row = self.text_2_row[q_id]
-        d_row = self.img_2_row[d_id]
-        score = self.text_2_reps[q_row] @ self.img_2_reps[d_row]
+        score = 0
+        for tok in self.text_forward[q_id]:
+            if tok in self.image_forward[d_id]:
+                score += self.text_forward[q_id][tok] * \
+                    self.image_forward[d_id][tok]
         return score
 
 
@@ -181,7 +175,7 @@ else:
 
     lsr_searcher = index.quantized(num_results=args.topk)
     if args.mode == "hybrid":
-        forward_scorer = ForwardScorer(tokenizer, sparse_texts, sparse_images)
+        forward_scorer = ForwardScorer(sparse_texts, sparse_images)
         # image_forward = {}
         # text_forward = {}
         # for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
