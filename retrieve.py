@@ -131,7 +131,7 @@ for idx, pair in res.iterrows():
         doc_id = pair["docno"]
         qi = qid2index[query_id]
         di = did2index[doc_id]
-        score = (qi * di).sum()
+        score = (text_outputs[qi] * image_outputs[di]).sum()
 
 end = time.time()
 total_time = end - start
