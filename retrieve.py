@@ -127,7 +127,7 @@ for idx, pair in res.iterrows():
         sparse_query = qid2rep[query_id]
         sparse_doc = did2rep[doc_id]
         for tok in sparse_query:
-            for tok in sparse_doc:
+            if tok in sparse_doc:
                 score += sparse_query[tok]*sparse_doc[tok]
 end = time.time()
 total_time = end - start
