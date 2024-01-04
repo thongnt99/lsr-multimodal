@@ -139,9 +139,9 @@ class ForwardScorer:
             tok_weights = list(tok2w.values())
             tok_ids = tokenizer.convert_tokens_to_ids(toks)
             max_tok = max(max_tok, len(tok_ids))
-            row_ind = np.zeros(len(tok_weights))
+            col_ind = np.zeros(len(tok_weights))
             sparse_vec = csr_array(
-                (tok_weights, (row_ind, tok_ids)), shape=(1, 30522))
+                (tok_weights, (tok_ids, col_ind)), shape=(30522, 1))
             self.img_2_reps.append(sparse_vec)
 
             # self.img_tok_indices.append(np.array(tok_ids))
