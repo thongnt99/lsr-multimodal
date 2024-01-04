@@ -80,7 +80,7 @@ id2text = {}
 for image in tqdm(meta_data['images'], desc="Processing meta data."):
     captions = [sent["raw"] for sent in image["sentences"]]
     caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
-    id2text.update(dict(zip(captions, caption_ids)))
+    id2text.update(dict(zip(caption_ids, captions)))
 
 text_ids = []
 text_topk_toks = []
