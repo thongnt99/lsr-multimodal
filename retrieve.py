@@ -61,7 +61,7 @@ for batch in tqdm(img_dataloader, desc="Encode images"):
             list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
         image_ids.extend(batch_ids)
         image_topk_toks.extend(batch_topk_toks)
-        image_topk_weights.extend(list(batch_topk_weights.to("cpu")))
+        image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
         image_outputs.append(batch_sparse.to("cpu"))
 image_outputs = torch.cat(image_outputs, 0)
 with Pool(18) as p:
