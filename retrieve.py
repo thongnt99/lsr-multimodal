@@ -14,6 +14,7 @@ if not pt.started():
 from pyterrier_pisa import PisaIndex
 import time
 import json
+import numpy as np
 
 parser = argparse.ArgumentParser(description="LSR Index Pisa")
 parser.add_argument("--data", type=str,
@@ -108,6 +109,49 @@ else:
             zip(text_ids, text_topk_toks, text_topk_weights)))
     json.dump(sparse_texts, open(sparse_texts_path, "w"))
 
+
+class ForwardScorer:
+    def __init__(self, tokenizer, sparse_texts, sparse_images):
+        self.text_2_row = {}
+        self.img_2_row = {}
+        self.text_tok_indices = []
+        self.text_tok_weights = []
+        self.img_tok_indices = []
+        self.img_tok_weights = []
+        max_tok = 0
+        for idx, stext in tqdm(sparse_texts, desc="building forward index"):
+            self.text_2_row[stext["qid"]] = idx
+            tok2w = stext["query_toks"]
+            toks = list(tok2w.keys())
+            tok_weights = list(tok2w.values())
+            tok_ids = tokenizer.convert_tokens_to_ids(toks)
+            max_tok = max(max_tok, len(tok_ids))
+            self.text_tok_indices.append(np.array(tok_ids))
+            self.text_tok_weights.append(np.array(tok_weights))
+        max_tok = 0
+        for idx, stext in tqdm(sparse_images, desc="building forward index"):
+            self.img_2_row[stext["docno"]] = idx
+            tok2w = stext["toks"]
+            toks = list(tok2w.keys())
+            tok_weights = list(tok2w.values())
+            tok_ids = tokenizer.convert_tokens_to_ids(toks)
+            max_tok = max(max_tok, len(tok_ids))
+            self.img_tok_indices.append(np.array(tok_ids))
+            self.img_tok_weights.append(np.array(tok_weights))
+
+    def score(self, q_id, d_id):
+        q_row = self.text_2_row[q_id]
+        qtok_ids = np.expand_dims(self.text_tok_indices[q_row], axis=1)
+        qtok_weights = self.text_tok_weights[q_row]
+        drow = self.img_2_row[d_id]
+        dtok_ids = np.expand_dims(self.img_tok_indices[drow], axis=0)
+        dtok_weights = self.img_tok_weights[drow]
+        mask = (qtok_ids == dtok_ids)
+        x, y = np.nonzero(mask)
+        score = np.dot(qtok_weights[x], dtok_weights[y])
+        return score
+
+
 if args.mode == "exp":
     lsr_searcher = index.quantized(num_results=args.topk)
     start = time.time()
@@ -135,23 +179,18 @@ else:
 
     lsr_searcher = index.quantized(num_results=args.topk)
     if args.mode == "hybrid":
-        image_forward = {}
-        text_forward = {}
-        for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
-            image_forward[image["docno"]] = image["toks"]
-        for text in sparse_texts:
-            text_forward[text["qid"]] = text["query_toks"]
+        forward_scorer = ForwardScorer(tokenizer, sparse_texts, sparse_images)
+        # image_forward = {}
+        # text_forward = {}
+        # for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
+        #     image_forward[image["docno"]] = image["toks"]
+        # for text in sparse_texts:
+        #     text_forward[text["qid"]] = text["query_toks"]
     start = time.time()
     res = lsr_searcher(sparse_texts_no_expansion)
     if args.mode == "hybrid":
         for idx, row in res.iterrows():
-            sparse_text = text_forward[row["qid"]]
-            sparse_img = image_forward[row["docno"]]
-            score = 0
-            for tok in sparse_text:
-                if tok in sparse_img:
-                    score += sparse_text[tok] * sparse_img[tok]
-            row["score"] = score
+            row["score"] = forward_scorer.score(row["qid"], row["docno"])
     end = time.time()
     total_time = end - start
 print(f"Total running time: {total_time} seconds")
