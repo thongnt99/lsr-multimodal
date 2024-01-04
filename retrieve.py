@@ -115,8 +115,8 @@ class ForwardScorer:
     def __init__(self, tokenizer, sparse_texts, sparse_images):
         self.text_2_row = {}
         self.img_2_row = {}
-        self.text_2_reps = {}
-        self.img_2_reps = {}
+        self.text_2_reps = []
+        self.img_2_reps = []
         max_tok = 0
         for idx, stext in enumerate(tqdm(sparse_texts, desc="building forward index")):
             self.text_2_row[stext["qid"]] = idx
