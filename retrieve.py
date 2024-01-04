@@ -186,7 +186,7 @@ else:
         for text in sparse_texts:
             text_forward[text["qid"]] = typed.Dict()
             for tok in text["query_toks"]:
-                text_forward[text["qid"]] = text["query_toks"][tok]
+                text_forward[text["qid"]][tok] = text["query_toks"][tok]
 
         @njit
         def score(text, image):
