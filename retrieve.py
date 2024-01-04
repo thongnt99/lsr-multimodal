@@ -121,32 +121,32 @@ spec = [
 ]
 
 
-@jitclass(spec)
-class ForwardScorer:
-    def __init__(self,  sparse_texts, sparse_images):
-        self.image_forward = typed.Dict.empty(
-            key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
-        self.text_forward = typed.Dict.empty(
-            key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
-        for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
-            self.image_forward[image["docno"]] = typed.Dict.empty(
-                key_type=types.unicode_type, value_type=types.float64)
-            for tok in image["toks"]:
-                self.image_forward[image["docno"]][tok] = image["toks"][tok]
-            # = image["toks"]
-        for text in sparse_texts:
-            self.text_forward[text["qid"]] = typed.Dict.empty(
-                key_type=types.unicode_type, value_type=types.float64)
-            for tok in text["query_toks"]:
-                self.text_forward[text["qid"]][tok] = text["query_toks"][tok]
+# @jitclass(spec)
+# class ForwardScorer:
+#     def __init__(self,  sparse_texts, sparse_images):
+#         self.image_forward = typed.Dict.empty(
+#             key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
+#         self.text_forward = typed.Dict.empty(
+#             key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
+#         for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
+#             self.image_forward[image["docno"]] = typed.Dict.empty(
+#                 key_type=types.unicode_type, value_type=types.float64)
+#             for tok in image["toks"]:
+#                 self.image_forward[image["docno"]][tok] = image["toks"][tok]
+#             # = image["toks"]
+#         for text in sparse_texts:
+#             self.text_forward[text["qid"]] = typed.Dict.empty(
+#                 key_type=types.unicode_type, value_type=types.float64)
+#             for tok in text["query_toks"]:
+#                 self.text_forward[text["qid"]][tok] = text["query_toks"][tok]
 
-    # def score(self, q_id, d_id):
-    #     score = 0
-    #     for tok in self.text_forward[q_id]:
-    #         if tok in self.image_forward[d_id]:
-    #             score += self.text_forward[q_id][tok] * \
-    #                 self.image_forward[d_id][tok]
-    #     return score
+# def score(self, q_id, d_id):
+#     score = 0
+#     for tok in self.text_forward[q_id]:
+#         if tok in self.image_forward[d_id]:
+#             score += self.text_forward[q_id][tok] * \
+#                 self.image_forward[d_id][tok]
+#     return score
 
 
 if args.mode == "exp":
@@ -177,27 +177,28 @@ else:
     lsr_searcher = index.quantized(num_results=args.topk)
     if args.mode == "hybrid":
         # forward_scorer = ForwardScorer(sparse_texts, sparse_images)
-        image_forward = typed.Dict.empty(key_type=types.unicode_type, value_type=types.DictType(
-            keyty=types.unicode_type, valty=types.float64))
-        text_forward = typed.Dict.empty(
-            key_type=types.unicode_type, value_type=types.DictType(keyty=types.unicode_type, valty=types.float64))
+        image_forward = {}
+        text_forward = {}
         for image in tqdm(sparse_images, desc="Buiding forward indexing for image collection"):
-            image_forward[image["docno"]] = typed.Dict.empty(
-                key_type=types.unicode_type, value_type=types.float64)
-            for tok in image["toks"]:
-                image_forward[image["docno"]][tok] = image["toks"][tok]
+            image_forward[image["docno"]] = image["toks"]
         for text in sparse_texts:
-            text_forward[text["qid"]] = typed.Dict.empty(
-                key_type=types.unicode_type, value_type=types.float64)
-            for tok in text["query_toks"]:
-                text_forward[text["qid"]][tok] = text["query_toks"][tok]
-        forward_scorer = ForwardScorer(sparse_texts, sparse_images)
+            text_forward[text["qid"]] = text["query_toks"]
+
+        @njit
+        def score(text, image):
+            score = 0
+            for tok in text:
+                if tok in image:
+                    score = score + text[tok]*image[tok]
+            return score
 
     start = time.time()
     res = lsr_searcher(sparse_texts_no_expansion)
     if args.mode == "hybrid":
         for idx, row in res.iterrows():
-            row["score"] = forward_scorer.score(row["qid"], row["docno"])
+            row["score"] = score(text_forward[row["qid"]],
+                                 image_forward[row["docno"]])
+            # forward_scorer.score(row["qid"], row["docno"])
     end = time.time()
     total_time = end - start
 print(f"Total running time: {total_time} seconds")
