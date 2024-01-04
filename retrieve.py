@@ -1,3 +1,4 @@
+from pathlib import Path
 from multiprocessing import Pool
 import argparse
 import torch
@@ -43,31 +44,37 @@ img_dataloader = DataLoader(dataset["img_emb"], batch_size=args.batch_size)
 text_dataloader = DataLoader(dataset["text_emb"], batch_size=args.batch_size)
 model = D2SModel.from_pretrained(args.model).to(device)
 tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-sparse_images = []
-image_ids = []
-image_topk_toks = []
-image_topk_weights = []
-for batch in tqdm(img_dataloader, desc="Encode images"):
-    batch_ids = batch["id"]
-    batch_dense = batch["emb"].to(device)
-    with torch.no_grad():
-        batch_sparse = model(batch_dense)
-        max_k = (batch_sparse > 0).sum(dim=1).max().item()
-        batch_topk_weights, batch_topk_indices = batch_sparse.topk(
-            max_k, dim=1)
-        batch_topk_toks = [tokenizer.convert_ids_to_tokens(
-            list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
-        image_ids.extend(batch_ids)
-        image_topk_toks.extend(batch_topk_toks)
-        image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
-with Pool(18) as p:
-    sparse_images = p.starmap(create_json_doc, list(
-        zip(image_ids, image_topk_toks, image_topk_weights)))
+index_dir = Path(
+    f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}")
+index = PisaIndex(index_dir, stemmer='none', threads=1)
+sparse_image_path = index_dir/"sparse_images.json"
+if sparse_image_path.exists():
+    sparse_images = json.load(open(sparse_image_path))
+else:
+    sparse_images = []
+    image_ids = []
+    image_topk_toks = []
+    image_topk_weights = []
+    for batch in tqdm(img_dataloader, desc="Encode images"):
+        batch_ids = batch["id"]
+        batch_dense = batch["emb"].to(device)
+        with torch.no_grad():
+            batch_sparse = model(batch_dense)
+            max_k = (batch_sparse > 0).sum(dim=1).max().item()
+            batch_topk_weights, batch_topk_indices = batch_sparse.topk(
+                max_k, dim=1)
+            batch_topk_toks = [tokenizer.convert_ids_to_tokens(
+                list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
+            image_ids.extend(batch_ids)
+            image_topk_toks.extend(batch_topk_toks)
+            image_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
+    with Pool(18) as p:
+        sparse_images = p.starmap(create_json_doc, list(
+            zip(image_ids, image_topk_toks, image_topk_weights)))
+    indexer = index.toks_indexer(mode="overwrite")
+    indexer.index(sparse_images)
+    json.dump(sparse_images, open(sparse_image_path, "w"))
 print(sparse_images[0])
-index_name = f"./indexes/{args.data.replace('/','_')}/{args.model.replace('/','_')}"
-index = PisaIndex(index_name, stemmer='none', threads=1)
-indexer = index.toks_indexer(mode="overwrite")
-indexer.index(sparse_images)
 
 sparse_texts = []
 meta_data = json.load(open(hf_hub_download(
@@ -77,28 +84,33 @@ for image in tqdm(meta_data['images'], desc="Processing meta data."):
     captions = [sent["raw"] for sent in image["sentences"]]
     caption_ids = [str(sent["sentid"]) for sent in image["sentences"]]
     id2text.update(dict(zip(caption_ids, captions)))
-text_ids = []
-text_topk_toks = []
-text_outputs = []
-text_topk_weights = []
-for batch in tqdm(text_dataloader, desc="Encode texts"):
-    batch_ids = batch["id"]
-    batch_dense = batch["emb"].to(device)
-    with torch.no_grad():
-        batch_sparse = model(batch_dense)
-        max_k = (batch_sparse > 0).sum(dim=1).max().item()
-        batch_topk_weights, batch_topk_indices = batch_sparse.topk(
-            max_k, dim=1)
-    batch_topk_toks = [tokenizer.convert_ids_to_tokens(
-        list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
-    text_ids.extend(batch_ids)
-    text_topk_toks.extend(batch_topk_toks)
-    text_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
-    text_outputs.append(batch_sparse.to("cpu"))
-    break
-with Pool(18) as p:
-    sparse_texts = p.starmap(create_json_query, list(
-        zip(text_ids, text_topk_toks, text_topk_weights)))
+sparse_texts_path = index_dir/"sparse_texts.json"
+if sparse_texts_path.exists():
+    sparse_texts = json.load(open(sparse_texts_path))
+else:
+    text_ids = []
+    text_topk_toks = []
+    text_outputs = []
+    text_topk_weights = []
+    for batch in tqdm(text_dataloader, desc="Encode texts"):
+        batch_ids = batch["id"]
+        batch_dense = batch["emb"].to(device)
+        with torch.no_grad():
+            batch_sparse = model(batch_dense)
+            max_k = (batch_sparse > 0).sum(dim=1).max().item()
+            batch_topk_weights, batch_topk_indices = batch_sparse.topk(
+                max_k, dim=1)
+        batch_topk_toks = [tokenizer.convert_ids_to_tokens(
+            list_tok_ids) for list_tok_ids in batch_topk_indices.to("cpu")]
+        text_ids.extend(batch_ids)
+        text_topk_toks.extend(batch_topk_toks)
+        text_topk_weights.extend(batch_topk_weights.to("cpu").tolist())
+        text_outputs.append(batch_sparse.to("cpu"))
+        break
+    with Pool(18) as p:
+        sparse_texts = p.starmap(create_json_query, list(
+            zip(text_ids, text_topk_toks, text_topk_weights)))
+    json.dump(sparse_texts, open(sparse_texts_path, "w"))
 sparse_texts_no_expansion = []
 for st in sparse_texts:
     qid = st["qid"]
