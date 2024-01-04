@@ -119,7 +119,7 @@ class ForwardScorer:
         self.img_tok_indices = []
         self.img_tok_weights = []
         max_tok = 0
-        for idx, stext in tqdm(sparse_texts, desc="building forward index"):
+        for idx, stext in enumerate(tqdm(sparse_texts, desc="building forward index")):
             self.text_2_row[stext["qid"]] = idx
             tok2w = stext["query_toks"]
             toks = list(tok2w.keys())
@@ -129,7 +129,7 @@ class ForwardScorer:
             self.text_tok_indices.append(np.array(tok_ids))
             self.text_tok_weights.append(np.array(tok_weights))
         max_tok = 0
-        for idx, simg in tqdm(sparse_images, desc="building forward index"):
+        for idx, simg in enumerate(tqdm(sparse_images, desc="building forward index")):
             self.img_2_row[simg["docno"]] = idx
             tok2w = simg["toks"]
             toks = list(tok2w.keys())
