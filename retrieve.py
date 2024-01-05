@@ -166,9 +166,8 @@ if args.mode == "faiss":
         tok_weights = np.array(
             list(text["query_toks"].values()), dtype=np.float32)
         text_denses[idx][tok_ids] = tok_weights
-    # index = faiss.IndexHNSWFlat(30255, 32, 0)
-    # index.train(image_denses)
-    index = faiss.IndexFlatIP(30255)
+    index = faiss.IndexHNSWFlat(30255, 32, 0)
+    index.train(image_denses)
     index.add(image_denses)
     start = time.time()
     D, I = index.search(text_denses, 1000)
