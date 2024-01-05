@@ -148,8 +148,36 @@ spec = [
 #                 self.image_forward[d_id][tok]
 #     return score
 
+if args.mode == "faiss":
+    import faiss
+    faiss.omp_set_num_threads(1)
+    num_images = len(sparse_images)
+    image_denses = np.zeros((num_images, 30255), dtype=np.float32)
+    for idx, img in enumerate(sparse_images):
+        toks = list(img["toks"].keys())
+        tok_ids = np.array(tokenizer.convert_tokens_to_ids(toks))
+        tok_weights = np.array(list(img["toks"].values()), dtype=np.float32)
+        image_denses[idx][tok_ids] = tok_weights
+    num_texts = len(sparse_texts)
+    text_denses = np.zeros((num_texts, 30255), dtype=np.float32)
+    for idx, text in enumerate(sparse_texts):
+        toks = list(text["query_toks"].keys())
+        tok_ids = np.array(tokenizer.convert_tokens_to_ids(toks))
+        tok_weights = np.array(
+            list(text["query_toks"].values()), dtype=np.float32)
+        text_denses[idx][tok_ids] = tok_weights
+    index = faiss.IndexHNSWFlat(30255, 32, 0)
+    index.train(image_denses)
+    index.add(image_denses)
+    start = time.time()
+    D, I = index.search(text_denses, 1000)
+    end = time.time()
+    total_time = end - start
+    print(f"Total running time: {total_time} seconds")
+    print(f"s/q: {total_time*1.0/len(text_denses)}")
+    print(f"q/s: {len(text_denses)*1.0/total_time}")
 
-if args.mode == "exp":
+elif args.mode == "exp":
     lsr_searcher = index.quantized(num_results=args.topk)
     start = time.time()
     res = lsr_searcher(sparse_texts)
