@@ -11,8 +11,9 @@ args = parser.parse_args()
 dataset = load_dataset(args.data, data_files={"img_emb": "img_embs.parquet",
                                               "text_emb": "text_embs.parquet"}, keep_in_memory=True).with_format("numpy")
 
-index = faiss.IndexHNSWFlat(256, 32, 0)
-index.train(dataset["img_emb"]["emb"])
+# index = faiss.IndexHNSWFlat(256, 32, 0)
+index = faiss.IndexFlatIP(256)
+# index.train(dataset["img_emb"]["emb"])
 index.add(dataset["img_emb"]["emb"])
 queries = dataset["text_emb"]["emb"][:2000]
 start = time.time()
