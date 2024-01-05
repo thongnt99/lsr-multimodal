@@ -188,7 +188,7 @@ else:
             for tok in text["query_toks"]:
                 text_forward[text["qid"]][tok] = text["query_toks"][tok]
 
-        @njit
+        @njit(parallel=True)
         def score(text, image):
             score = 0
             for tok in text:
