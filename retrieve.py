@@ -173,10 +173,26 @@ if args.mode == "faiss":
     D, I = index.search(text_denses, 1000)
     end = time.time()
     total_time = end - start
+    print("Retrieving top 1000")
     print(f"Total running time: {total_time} seconds")
     print(f"s/q: {total_time*1.0/len(text_denses)}")
     print(f"q/s: {len(text_denses)*1.0/total_time}")
-
+    start = time.time()
+    D, I = index.search(text_denses, 100)
+    end = time.time()
+    total_time = end - start
+    print("Retrieving top 100")
+    print(f"Total running time: {total_time} seconds")
+    print(f"s/q: {total_time*1.0/len(text_denses)}")
+    print(f"q/s: {len(text_denses)*1.0/total_time}")
+    start = time.time()
+    D, I = index.search(text_denses, 10)
+    end = time.time()
+    total_time = end - start
+    print("Retrieving top 10")
+    print(f"Total running time: {total_time} seconds")
+    print(f"s/q: {total_time*1.0/len(text_denses)}")
+    print(f"q/s: {len(text_denses)*1.0/total_time}")
 elif args.mode == "exp":
     lsr_searcher = index.quantized(num_results=args.topk)
     start = time.time()
