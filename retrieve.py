@@ -185,7 +185,7 @@ else:
             # for tok in image["toks"]:
             #     image_forward[image["docno"]][tok] = image["toks"][tok]
         for text in sparse_texts:
-            text_forward[text["qid"]] = text["qtoks"]
+            text_forward[text["qid"]] = text["query_toks"]
             # typed.Dict()
             # for tok in text["query_toks"]:
             #     text_forward[text["qid"]][tok] = text["query_toks"][tok]
