@@ -48,6 +48,7 @@ tokens = tokenizer.convert_ids_to_tokens(indices)
 print(dict(zip(tokens, weights.tolist())))  
 ```
 In the above example: 
+
 The input image (ID=2):
 ![alt text](./sample_images/COCO_val2014_000000184613.jpg)
 
