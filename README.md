@@ -82,11 +82,11 @@ Note:
 - Some other pretrained checkpoints are available in HuggingFace ([here](https://huggingface.co/lsr42?search_models=d2s)).
 
 ## Citing and Authors
-If you find this repository helpful, please cite our paper [Multi-Modal Learned Sparse Retrieval with Probabilistic Expansion Control](link-to-be-updated)
+If you find this repository helpful, please cite our paper [Multimodal Learned Sparse Retrieval with Probabilistic Expansion Control](link-to-be-updated)
 
 ```bibtex
 @inproceedings{nguyen2024multimodal,
-  title={Multi-Modal Learned Sparse Retrieval with Probabilistic Expansion Control},
+  title={Multimodal Learned Sparse Retrieval with Probabilistic Expansion Control},
   author={Nguyen, Thong and Hendriksen, Mariya and Yates, Andrew and  De Rijke, Maarten},
   booktitle={Advances in Information Retrieval: 46th European Conference on Information Retrieval, ECIR 2024, Glasgow, UK},
   year={2024},
