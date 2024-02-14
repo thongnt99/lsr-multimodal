@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/736745722.svg)](https://zenodo.org/doi/10.5281/zenodo.10659509)
+
 # Multimodal Learned Sparse Retrieval 
 
 ### 1. Create conda environment and install dependencies: 
